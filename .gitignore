@@ -1,0 +1,63 @@
+# MSBuild's log file
+msbuild.*
+
+# VSMSBuild generated files in CoreXT
+*.projhash*
+*.sln
+*.slnhash*
+*.opensdf
+*.sdf
+*.suo
+/src/.vscode/**/*
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.csproj.DotSettings
+
+# Toolset generated files
+.config/corext.config
+
+# Build.exe
+*.err
+*.wrn
+*.log
+*.prf
+*.trc
+buildd.dbb
+build.dbb
+buildd.evt
+build.evt
+
+# code tag files
+.tags
+.tags_sorted_by_file
+GPATH
+GRTAGS
+GTAGS
+
+# VS tool files
+*.GhostDoc.xml
+
+#vim files
+*~
+*.swp
+
+# VS solution user files
+*.vcxproj.user
+
+# VS Code files
+/**/.vscode
+
+# Python cache
+/**/__pycache__
+
+# PyCharm files (and other IntelliJ based IDE's)
+/**/.idea
+
+# terraform
+.terraform/**/*
+*terraform.tfstate*
+.terraform
