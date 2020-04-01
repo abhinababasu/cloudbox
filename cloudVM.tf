@@ -12,8 +12,7 @@ variable "region" {
 
 // Todo add rule for rdp/ssh from home ip address 102 103
 variable "network_allow_rules" {
-  type = "list"
-
+  type = list(string)
   /*
   This is a list of IP addresses to be opened in NSG rules. The format is
   IP,PORT,Protocol
@@ -25,8 +24,8 @@ variable "network_allow_rules" {
 }
 
 // Larger VMs like F8s OR F16s work better, for basic testing F2s also works
-variable vm_size {
-  default = "Standard_F8s"
+variable "vm_size" {
+  default = "Standard_F8s_v2"
 }
 
 variable "userName" {
@@ -41,13 +40,15 @@ variable "password" {
 // -------------------------------------------------------------------------
 // Azure setup
 // -------------------------------------------------------------------------
-provider "azurerm" {}
+provider "azurerm" {
+  features{}
+}
 
 resource "azurerm_resource_group" "rg" {
   name     = "${var.userName}CloudDevBoxRG"
-  location = "${var.region}"
+  location = var.region
 
-  tags {
+  tags = {
     environment = "Developer boxes"
   }
 }
@@ -57,35 +58,35 @@ resource "azurerm_resource_group" "rg" {
 // -------------------------------------------------------------------------
 resource "azurerm_virtual_network" "devVNet" {
   name                = "${var.userName}cloudDevBoxVmVnet"
-  resource_group_name = "${azurerm_resource_group.rg.name}"
-  location            = "${var.region}"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = var.region
   address_space       = ["10.0.0.0/16"]
 }
 
 resource "azurerm_subnet" "devSubnet" {
   name                 = "${var.userName}cloudDevBoxVmSubnet"
-  resource_group_name  = "${azurerm_resource_group.rg.name}"
-  virtual_network_name = "${azurerm_virtual_network.devVNet.name}"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.devVNet.name
   address_prefix       = "10.0.2.0/24"
 }
 
 resource "azurerm_public_ip" "devPublicIp" {
-  name                         = "${var.userName}CloudDevBoxPublicIp"
-  resource_group_name          = "${azurerm_resource_group.rg.name}"
-  location                     = "${var.region}"
-  public_ip_address_allocation = "dynamic"
-  idle_timeout_in_minutes      = 30
-  domain_name_label            = "${var.userName}-clouddevbox"
+  name                    = "${var.userName}CloudDevBoxPublicIp"
+  resource_group_name     = azurerm_resource_group.rg.name
+  location                = var.region
+  idle_timeout_in_minutes = 30
+  domain_name_label       = "${var.userName}-clouddevbox"
+  allocation_method       = "Dynamic"
 }
 
 locals {
-  vmFqdn = "${azurerm_public_ip.devPublicIp.fqdn}"
+  vmFqdn = azurerm_public_ip.devPublicIp.fqdn
 }
 
 resource "azurerm_network_security_group" "devNsg" {
   name                = "${var.userName}CloudDevBoxNsg"
-  resource_group_name = "${azurerm_resource_group.rg.name}"
-  location            = "${var.region}"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = var.region
 
   security_rule {
     direction                  = "Inbound"
@@ -162,33 +163,31 @@ resource "azurerm_network_security_group" "devNsg" {
 
 resource "azurerm_network_security_rule" "allowrules" {
   name                        = "${var.userName}rules"
-  resource_group_name         = "${azurerm_resource_group.rg.name}"
-  network_security_group_name = "${azurerm_network_security_group.devNsg.name}"
+  resource_group_name         = azurerm_resource_group.rg.name
+  network_security_group_name = azurerm_network_security_group.devNsg.name
 
   direction                  = "Inbound"
-  priority                   = "${count.index + 100}"
-  name                       = "Rule${count.index}"
-  source_address_prefix      = "${element(split(",", element(var.network_allow_rules, count.index)), 0)}"
-  destination_port_range     = "${element(split(",", element(var.network_allow_rules, count.index)), 1)}"
-  protocol                   = "${element(split(",", element(var.network_allow_rules, count.index)), 2)}"
+  priority                   = count.index + 100
+  source_address_prefix      = element(split(",", element(var.network_allow_rules, count.index)), 0)
+  destination_port_range     = element(split(",", element(var.network_allow_rules, count.index)), 1)
+  protocol                   = element(split(",", element(var.network_allow_rules, count.index)), 2)
   source_port_range          = "*"
   destination_address_prefix = "*"
   access                     = "Allow"
 
-  count = "${length(var.network_allow_rules)}"
+  count = length(var.network_allow_rules)
 }
 
 resource "azurerm_network_interface" "devNic" {
-  name                      = "${var.userName}CloudDevBoxNetworkInterface"
-  resource_group_name       = "${azurerm_resource_group.rg.name}"
-  location                  = "${var.region}"
-  network_security_group_id = "${azurerm_network_security_group.devNsg.id}"
+  name                = "${var.userName}CloudDevBoxNetworkInterface"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = var.region
 
   ip_configuration {
     name                          = "${var.userName}CloudDevBoxNicConfig"
-    subnet_id                     = "${azurerm_subnet.devSubnet.id}"
+    subnet_id                     = azurerm_subnet.devSubnet.id
     private_ip_address_allocation = "dynamic"
-    public_ip_address_id          = "${azurerm_public_ip.devPublicIp.id}"
+    public_ip_address_id          = azurerm_public_ip.devPublicIp.id
   }
 }
 
@@ -197,7 +196,7 @@ resource "azurerm_network_interface" "devNic" {
 // -------------------------------------------------------------------------
 resource "random_id" "randomId" {
   keepers = {
-    resource_group = "${azurerm_resource_group.rg.name}"
+    resource_group = azurerm_resource_group.rg.name
   }
 
   byte_length = 8
@@ -206,8 +205,8 @@ resource "random_id" "randomId" {
 // Storage account for diagnostics
 resource "azurerm_storage_account" "diagStorage" {
   name                     = "diag${random_id.randomId.hex}"
-  resource_group_name      = "${azurerm_resource_group.rg.name}"
-  location                 = "${var.region}"
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = var.region
   account_replication_type = "LRS"
   account_tier             = "Standard"
 }
@@ -217,10 +216,10 @@ resource "azurerm_storage_account" "diagStorage" {
 // -------------------------------------------------------------------------
 resource "azurerm_virtual_machine" "devVirtualMachine" {
   name                  = "${var.userName}CloudDevBox"
-  resource_group_name   = "${azurerm_resource_group.rg.name}"
-  location              = "${var.region}"
-  network_interface_ids = ["${azurerm_network_interface.devNic.id}"]
-  vm_size               = "${var.vm_size}"
+  resource_group_name   = azurerm_resource_group.rg.name
+  location              = var.region
+  network_interface_ids = [azurerm_network_interface.devNic.id]
+  vm_size               = var.vm_size
 
   storage_os_disk {
     name              = "osDisk${var.userName}"
@@ -240,8 +239,8 @@ resource "azurerm_virtual_machine" "devVirtualMachine" {
 
   os_profile {
     computer_name  = "${var.userName}CloudDevBox"
-    admin_username = "${var.userName}"
-    admin_password = "${var.password}"
+    admin_username = var.userName
+    admin_password = var.password
   }
 
   os_profile_linux_config {
@@ -250,10 +249,10 @@ resource "azurerm_virtual_machine" "devVirtualMachine" {
 
   boot_diagnostics {
     enabled     = "true"
-    storage_uri = "${azurerm_storage_account.diagStorage.primary_blob_endpoint}"
+    storage_uri = azurerm_storage_account.diagStorage.primary_blob_endpoint
   }
 
-  tags {
+  tags = {
     generatedby = "terraform"
     author      = "abhinab@microsoft.com"
   }
@@ -264,10 +263,10 @@ resource "azurerm_virtual_machine" "devVirtualMachine" {
 
     connection {
       type     = "ssh"
-      user     = "${var.userName}"
-      password = "${var.password}"
+      user     = var.userName
+      password = var.password
       timeout  = "20m"
-      host     = "${local.vmFqdn}"
+      host     = local.vmFqdn
     }
   }
 
@@ -281,10 +280,10 @@ resource "azurerm_virtual_machine" "devVirtualMachine" {
 
     connection {
       type     = "ssh"
-      user     = "${var.userName}"
-      password = "${var.password}"
+      user     = var.userName
+      password = var.password
       timeout  = "20m"
-      host     = "${local.vmFqdn}"
+      host     = local.vmFqdn
     }
   }
 }
@@ -294,5 +293,9 @@ resource "azurerm_virtual_machine" "devVirtualMachine" {
 // -------------------------------------------------------------------------
 output "ip" {
   value = "Created vm ${azurerm_virtual_machine.devVirtualMachine.id}"
+}
+
+output "fqdn" {
   value = "Connect using ${var.userName}@${local.vmFqdn}"
 }
+
